@@ -623,10 +623,432 @@ public void Rendering_a_message() {
 
 # 第６章 単体テストの３つの手法
 ## 単体テストの３つの手法
+- 単体テストの３つの手法
+	- **出力値ベーステスト**...戻り値を確認するテスト
+		- 処理を行った後もテスト対象システムの状態とその協力者オブジェクトの状態が変わらない場合のみ適用できる
+			- 発生する結果が副作用を持たず、出力のみを行う(関数型)
+		- **最も質の高いテストケースを作成できる**
+	- **状態ベーステスト**...状態を確認するテスト
+		- 検証する処理の実行が終わった後にテスト対象システムの状態を検証する
+			- ここでいう状態とは、テスト対象システムの状態、協力者オブジェクトの状態、データベースなどのプロセス外依存の状態のこと
+		- 出力値ベースのテストの次に質の高いテストケースを作成できる
+		```c#
+		public class Order {
+			private readonly List<Product> _products = new List<Product>();
+			public IReadOnlyList<Products> Products => _products.ToList();
+			
+			public void AddProduct(Product product) {
+				_products.Add(product);
+			}
+		}
+		```
+		
+		```c#
+		// 注文に商品を追加する
+		[Fact]
+		public void Adding_a_product_to_an_order() {
+			var product = new Product("Hand wash");
+			var sut = new Order();
+			
+			sut.AddProduct(product);
+			
+			Assert.Equal(1, sut.Products.Count);
+			Assert.Equal(product, sut.Products[0]);
+		}
+		```
+	- **コミュニケーションベーステスト**...オブジェクト間のやり取りを確認するテスト
+		- モックを用いてテスト対象システムとその協力者オブジェクトとのあいだで行われるコミュニケーションを検証する
+		- 
+- これらの単体テストの手法は、１つのテストケースに対して１だけ適用することも３つすべて適用することもできる
 ## 単体テストの３つの手法の比較
+- 単体テストを構成する４本柱の観点で、３つの手法を比較する
+	- リグレッションに対する保護、迅速なフィードバック
+		- 単体テストの手法の違いによっては差が出ない
+		- 単体テストを作成する人の判断によって差がでる
+	- リファクタリンへの耐性
+		- **偽陽性**がリファクタリングの際にどのくらい発生するかによって差がでる
+			- 偽陽性はテストケースが実装の詳細に結びつくことで発生する
+		- 出力値ベーステストを適用した場合
+			- もっとも偽陽性の発生が抑えられる
+			- なぜなら実装の詳細と結びつくのは、テスト対象メソッド自体が実装の詳細である場合のみなので
+		- 状態ベーステストケース
+			- 出力値ベースのテストと比べて偽陽性が発生しやすくなる
+			- なぜなら、テスト対象のメソッドに加えて、そのメソッドの実行によって変更されたオブジェクトの状態もみることになるから
+			- テストケースとプロダクションコードとの結びつきが増えるほど、テストケースが実装の詳細と結びつく機会が多くなる
+		- コミュニケーションべーステスト
+			- 偽陽性に対して最も脆弱
+			- プロダクションコードに対して適切なカプセル化を施すことで、偽陽性の発生を抑えることは可能
+			- テストケースを作成する際は、他の手法を適用する場合よりも注意深く作成する必要がある
+				- 特にスタブとのやり取りを検証してしまうとリファクタリングでテストケースが必ず壊れるので、絶対にしてはいけない
+	- 保守のしやすさ
+		- 単体テスト手法の違いによって差がでるが、開発者ができることは少ない
+		- 保守のしやすさは以下の観点で把握できる
+			- テストケースを理解するのがどのくらい難しいか...テストケースのコード量
+			- テストケースを実施することがどのくらい難しいか...扱うプロセス外依存の数
+		- 出力値ベーステスト
+			- 最も保守がしやすい
+			- 入力値を渡す、出力値を検証することだけに専念できるので
+		- 状態ベーステスト
+			- 出力値ベーステストに比べて保守は難しくなる
+			- 状態の検証は出力値の検証よりもコード量が多くなるので
+		- コミュニケーションベーステスト
+			- 他の２つよりも劣る
+			- コミュニケーションの検証のために多くのコードを書く必要がある
+			- モックの連鎖(モックやスタブが他のモックやスタブを返す)が起こると、さらに保守のしやすさが悪化する
+	- 出力値ベースのテストが最もリファクタリングへの耐性と保守のしやすさに優れている
+		- 純粋関数である必要があるので、オブジェクト指向のプログラムとは相性が悪い
+		- しかし、状態ベーステストやコミュニケーションベーステストを出力値ベーステストに変えるテクニックがある
 ## 関数型アーキテクチャについて
+### 関数型プログラミング
+- 隠れた入力や出力がない関数で、入力値が同じであれば同じ結果を返す
+#### 隠れた入力や出力
+- 副作用...ファイル作成とかデータベース更新とか
+- 例外...メソッドシグネチャで確立された契約を無視したプログラムの流れが作られる
+- 内部もしくは外部の状態への参照...staticなプロパティを介したり、データベースやプライベートな可変フィールドを参照することで、、、
+### 関数型アーキテクチャ
+- 純粋関数で書かれたコードを最大限増やして、副作用を扱うコードを最小限に抑える
+- 関数型プログラミングが目標としていることは、**ビジネスロジックを扱うコードと副作用を起こすコードを分離すること**
+- 関数型アーキテクチャでは、**副作用をビジネスオペレーションの最初や最後に持ってくる**
+	- ビジネスロジックと副作用を分離しやすくする
+#### ビジネスロジックと副作用の分離
+- 決定を下すコード
+	- 関数的核(functional core)
+	- 副作用を起こすことがないので純粋関数で書ける
+- 決定に基づくアクションを実行するコード
+	- 可変殻(mutable shell)
+	- 純粋関数によって下された決定を観測可能な振る舞いの一部(データベース操作とか)に変換する
+##### 関数的核と可変殻の連携
+	1. 可変殻にて、関数的核に渡す全ての入力値が集められる
+	1. 関数的核は、可変殻から受け取った入力値をもとに決定を下す
+	1. 可変殻は、関数的核が下した決定をもとに副作用を発生させる
+- ２つの層を分離するには
+	- 下された決定を表現するクラス(関数的核の戻り値)に可変殻が処理を行うのに必要な全ての情報を全て含める
+	- 可変殻ではそのクラスにさらなる追加を必要としないようにする(不変オブジェクトにする)
+	- 単体テストでは、出力値ベーステストで関数的核を検証する
+	- 総合テストで可変殻の検証を行う
+#### 関数型アーキテクチャとヘキサゴナルアーキテクチャ
+- どちらも**関心の分離**が基盤になっている
+	- それぞれの層の責務が決まっている
+- どちらも依存の流れが一方向になっている
+	- 内側の層は外側の層に依存しない
+- 副作用の扱いに違いがある
+	- ヘキサゴナルアーキテクチャ
+		- ドメイン層内に限定される限り副作用を起こすことが許されている
+		- つまり、ドメイン層でデータベースの更新とかはしてはいけないが、ドメインクラスのインスタンス自体の状態は変えることが許される
+	- 関数型アーキテクチャ
+		- 全ての副作用を関数的核の外に出す
+		- ビジネスオペレーションの最初や最後に副作用を持ち込む
+	- 関数型アーキテクチャはヘキサゴナルアーキテクチャに対して副作用に関する制限を強化したアーキテクチャと見ることができる
 ## 関数型アーキテクチャおよび出力値ベーステストへの移行
+### 関数型アーキテクチャへのリファクタリング手順
+1. プロセス外依存の利用からモックの利用への移行
+1. モックの利用から関数型アーキテクチャの利用への移行
+- この移行を行うことで、状態ベーステストやコミュニケーションベーステストは出力値ベーステストを用いるものに変わることになる
+### 訪問者記録システムでのサンプル
+	- 訪問者がいつ訪れたのかを記録するシステム
+	- テキストファイルに訪問者の名前と訪問日時を記録していく
+	- 記録がファイルの上限に達したら、新たなインデックスを持つ訪問者記録ファイルを作成して、そこに新たな訪問者の記録を書き込む
+```c#
+public class AuditManager {
+	private readonly int _maxEntriesPerFile;	// １ファイルに記録できる訪問記録数の上限
+	private readonly string _directoryName;
+	
+	public AuditManger(int maxEntriesPerFile, string directoryName) {
+		_maxEntriesPerFile = maxEntriesPerFIle;
+		_directoryName = directoryName;
+	}
+	
+	public void AddRecord(string vvisitorName, DateTime timeOfVisit) {
+		string[] filePaths = Directory.GetFields(_directoryName);
+		(int index, string path)[] sorted = SortByIndex(filePaths);
+		
+		string newRecord = visitorName + ';' + timeOfVisit;
+		
+		if (sorted.Length == 0) {	// ファイルがない場合、新しく記録ファイルを作る
+			string newFile = Path.Combine(_directoryName, "audit_1.txt");
+			File.WriteAllText(newFile, newRecord);
+			return;
+		}
+		
+		(int currentFileIndex, string currentFilePath) = sorted.Last();	// 更新すべきファイルを取得
+		List<string> lines = File.ReadAllLines(currentFilePath).ToList();
+		
+		if (lines.Count < _maxEntriesPerFile) {	// ファイルの上限に達していない場合
+			lines.Add(newRecord);
+			string newContent = string.Join("\r\n", lines);
+			File.WriteAllText(currentFilePath, newContent);
+		} else {	// 上限に達している場合
+			int newIndex = currentFileIndex + 1;
+			string newName = currentFileIndex + 1;
+			string newFile = Path.Combine(_directoryName, newName);
+			File.WriteAllText(newFile, newRecord);
+		}
+	}
+}
+```
+- 現状のAuditManagerクラスは**ファイルシステムと深く結びついている**ため、AuditManagerクラスをそのままテストすることは難しい
+	- テストしようとしたら、ディレクトリにファイルを用意したり、ファイルを読み込んで確認したりしないといけない
+- このクラスに対する単体テストの評価
+	- リグレッションに対する保護...良い
+	- リファクタリングへの耐性...良い
+	- 迅速なフィードバック...悪い
+	- 保守のしやすさ...悪い
+- ただし、ファイルシステムに直接アクセスするようなテストは、第２章で定義している単体テストである条件を欠いているので、統合テストに分類される
+#### ステップ１ モックを用いることによる単体テストとファイルシステムの分離
+- テストケースとプロセス外依存が深く結びついてしまった場合、通常、そのプロセス外依存をモックに置き換えることで、この問題を解決できる
+	- AuditMangaerクラスのファイル操作をIFileSystemインターフェースとして抽出し
+	- そのインターフェース型を持つオブジェクトをAuditManagerクラスのコンストラクタに渡すようにリファクタリングする
+		- そうすることで、テストでファイルシステムをモックに置き換えることができるようになる
+```c#
+public class AuditManager {
+	private readonly int _maxEntriesPerFile;
+	private readonly string _directoryName;
+	private readonly IFileSystem _fileSystem;	// インターフェースで表現されたファイルシステム
+	
+	public AuditManger(int maxEntriesPerFile, string directoryName, IFileSystem fileSystem) {
+		_maxEntriesPerFile = maxEntriesPerFIle;
+		_directoryName = directoryName;
+		_fileSystem = fileSystem;
+	}
+	
+	public void AddRecord(string vvisitorName, DateTime timeOfVisit) {
+		string[] filePaths = _fileSystem.GetFields(_directoryName);	// インターフェースを呼び出す
+		(int index, string path)[] sorted = SortByIndex(filePaths);
+		
+		string newRecord = visitorName + ';' + timeOfVisit;
+		
+		if (sorted.Length == 0) {
+			string newFile = Path.Combine(_directoryName, "audit_1.txt");
+			_fileSystem.WriteAllText(newFile, newRecord);	// インターフェースを呼び出す
+			return;
+		}
+		
+		(int currentFileIndex, string currentFilePath) = sorted.Last();
+		List<string> lines = _fileSystem.ReadAllLines(currentFilePath).ToList();
+		
+		if (lines.Count < _maxEntriesPerFile) {
+			lines.Add(newRecord);
+			string newContent = string.Join("\r\n", lines);
+			_fileSystem.WriteAllText(currentFilePath, newContent);	// インターフェースを呼び出す
+		} else {
+			int newIndex = currentFileIndex + 1;
+			string newName = currentFileIndex + 1;
+			string newFile = Path.Combine(_directoryName, newName);
+			_fileSystem.WriteAllText(newFile, newRecord);	// インターフェースを呼び出す
+		}
+	}
+```
+
+```c#
+public interface IFileSystem {
+	string[] GetFIles(string directoryName);
+	void WriteAllText(string filePath, string content);
+	List<string> ReadAllLines(string filePath);
+}
+```
+
+```c#
+[Fact]
+public void A_new_file_is_created_when_the_current_file_overflows() {
+	var fileSystemMock = new Mock<IFileSytem>();
+	fileSystemMock
+		.Setup(x => x.GetFiles("audits"))
+		.Returns(new string[] {	// スタブの設定
+			@"audits\audit_1.text",
+			@"audits\audit_2.text",
+		});
+	fileSystemMock
+		.Setup(x => x.ReadAllLInes(@"audits\audit_2.txt"))
+		.Returns(/* ...略 */);	// スタブの設定
+	
+	var sut = new AuditManger(3, "audits", fileSystemMock.Object);
+	
+	sut.AddRecord("Alice", DateTime.Parse("2023-04-01T18:00:00"));
+	
+	fileSystemMock.Verify(x => WriteAllText(	// モックの検証は副作用メソッドだけ検証する(スタブは検証しない)
+		@"audits\audit_3.txt",
+		"Alice;2023-04-01T18:00:00"
+	));
+}
+```
+- このクラスに対する単体テストの評価
+	- リグレッションに対する保護...良い
+	- リファクタリングへの耐性...良い
+	- 迅速なフィードバック...良い
+	- 保守のしやすさ...普通
+
+#### ステップ２ 関数型アーキテクチャへのリファクタリング
+- ステップ１のリファクタリングで、リファクタリングへの耐性を維持したまま、迅速なフィードバックもできるようにした
+- 保守コストの観点では、モックの準備や検証で読みやすくはない、のでまだ改善できる(保守コストの観点は第４章で)
+- AuditManagerクラスから副作用を完全に取り除くようにする(関数的核にする)
+	- AuditManagerクラスの責務を、ファイルに対して行う操作の決定を下すだけにする
+	- AuditManagerクラスが決定を下すために必要な情報を提供したり、下された決定に基づいて処理を行ったりすることを別のクラスに任せる
+		- Persisterクラスを追加して、そのクラスにファイルシステムへの更新を行わせる
+```c#
+public class AuditManager {
+	private readonly int _maxEntriesPerFIle;
+	
+	public AuditManager(int maxEntriesPerFile) {
+		_maxEntriesPerFile = maxEntriesPerFile;
+	}
+	
+	public FileUPdate AddRecord(	//　ファイルシステムを更新せずに、どう更新するかの決定を返す！
+		FileContent[] files,	// ファイルシステムに対して何をするかを決定するのに必要な全ての情報を持つクラス
+		string visitorName,
+		DateTime timeOfVisit
+	) {
+		(int index, FileContent file)[] sorted = SortByIndex(files);
+		string newRecord = visitorName + ';' + timeOfVisit;
+		
+		if (sorted.Length == 0) {
+			return new FileUpdate("audit_1.txt", newRecord);	// ファイルの更新に関する決定を返す！
+		}
+		
+		(int currentFileIndex, FileContent currentFile) = sorted.Last();
+		List<string> lines = currentFile.Lines.ToList();
+		
+		if (lines.Count < _maxEntriesPerFile) {
+			lines.Add(rewRecord);
+			string newContent = string.Join("\r\n", lines);
+			return new FIleUpdate(currentFile.FIleName, newContent);	// ファイルの更新に関する決定を返す！
+		} else {
+			int newIndex currentFileIndex + 1;
+			string newName = $"audit_{newIndex}.txt";
+			return new FileUpdate(newName, newRecord);	// ファイルの更新に関する決定を返す！
+		}
+	}
+}
+```
+
+```c#
+public class FileContent {	// 決定を下すのに必要な情報を持つ不変オブジェクトのクラス
+	public readonly string FileName;
+	public readonly string[] Lines;
+	
+	public FileContent(string fileName, string[] lines) {
+		FileName = fileName;
+		Lines = lines;
+	}
+}
+
+public class FileUpdate {	// 決定を表現する不変オブジェクトのクラス
+	public readonly string FileName;	// どのファイルに
+	public readonly string NewContent;	// 何を書くか
+	
+	public FileUpdate(string fileName, string newContent) {
+		FileName = fileName;
+		NewContent = newContent;
+	}
+}
+```
+
+```c#
+public class Persister {
+	public FileContent[] ReadDirectory(string directoryName) {	// AuditManagerに渡す入力を作成する
+		return Directory
+			.GetFiles(directoryName)
+			.Select(x => new FileContent(
+				Path.GetFileName(x),
+				File.ReadAllLines(x)))
+			.ToArray();
+	}
+	
+	public void ApplyUpdate(string directoryName, FileUpdate update) {	// AuditManagerの決定を実行する(副作用を起こす)
+		string filePath = Path.Combine(directoryName, update.FileName);
+		FileWriteAllText(filePath, update.NewContent);
+	}
+}
+```
+
+- if文を含む複雑なビジネスロジックはAuditManagerクラスが担う
+	- 関数型アーキテクチャの目標であるビジネスロジックと発生する副作用の分離
+	- FileContentクラスとFileUpdateクラスはできるだけファイル操作のAPIに近づけて簡単にする(単体テストでテストする必要がないほどに、、！)
+		- 例えば、もしファイルシステムのAPIがReadAllLinesメソッドを提供していない場合、FileContentクラスではLinesフィールドを用意せずに、単一のstringフィールドを用意する
+		- AuditManagerクラスでTextフィールドからファイルの内容を解析するようにする
+		```c#
+		public class FileContent {	// 決定を下すのに必要な情報を持つ不変オブジェクトのクラス
+			public readonly string FileName;
+			public readonly string Text;	// もともとは string[] Lines
+			
+			public FileContent(string fileName, string text) {
+				FileName = fileName;
+				Text = text;
+			}
+		}
+		```
+
+- 関数的核(AuditManager)と可変殻(Persister)を分離したら、次はヘキサゴナルアーキテクチャで言うところの**アプリケーションサービス**が必要になる
+	- アプリケーションサービスは、**外部クライアントがアクセスする入口**を担い、**関数的核と可変殻を連携**を行う
+	
+```c#
+public class ApplicationService {
+	private readonly string _directoryName;
+	private readonly AuditManager _auditManager;
+	private readonly Persister _persister;
+	
+	public ApplicationService(string directoryName, int maxEntriesPerFile) {
+		_directoryName = directoryName;
+		_auditManager = new AuditManager(maxEntriesPerFile);
+		_persister = new Persister();
+	}
+	
+	public void AddRecord(string visitorName, DateTime timeOfVisit) {
+		FileContent[] files = _persister.ReadDirectory(_directoryName);
+		FileUpdate update = _auditManager.AddRecord(files, visitorName, timeOfVisit);
+		_persister.ApplyUpdate(_directoryName, update);
+	}
+}
+```
+
+- これで単体テストで、訪問者記録システムの振る舞いを簡単に検証できるようになった
+```c#
+[Fact]
+public void A_new_file_is_created_when_the_current_file_overflows() {
+	var sut = new AuditManager(3);	// 3つ記録されていたら次のファイルを作る
+	var files = new FIleContent[] {
+		new FileContent("audit_1.txt", new string[0]),
+		new FileContent("audit_2.txt", new string[]{
+			"Peter;2023-04-01T18:00:00",
+			"Jane;2023-04-01T18:30:00",
+			"Jack;2023-04-01T19:00:00"
+		})
+	};
+	
+	FileUpdate update = sut.AddRecord(files, "Alice", DateTime.Parse("2023-04-01T18:00:00"));	// 決定事項を返す！
+	
+	Assert.Equal("audit_3.txt", update.FIleName);
+	Assert.Equal("Alice;2023-04-01T18:00:00", update.NewContent);
+}
+```
+- 迅速なフィードバックを維持したまま複雑なモックの設定が不要になった
+- バージョンごとの表
+#### 開発がさらに進んでいった時
+- 以下のような要件が増えたらどうすればよいか？
+	- このシステムに「特定の訪問者の記録を全て消す」という新たなユースケースが増えた
+	- 訪問者の名前の最大文字数を決める必要がある、ということが決まった
+- ...略
+
 ## 関数型アーキテクチャの欠点
+### 関数型アーキテクチャの導入が難しいケース
+- 今回見てきた訪問者記録システムは関数型アーキテクチャを上手く導入することができた
+	- 理由は、関数的核を呼び出す前に、全ての入力を集めることができたから
+- 決定を下す流れが複雑な場合は導入が難しい
+	- 例えば、決定を下している最中にプロセス外依存(データベースとか)を参照して条件分岐する場合とか
+	- 関数的核の中でそんなことをしたら純粋関数ではなくなってしまう
+	- 解決策はいくつかあるが、
+		- パフォーマンスを犠牲にしたりとか
+		- 詳しくは第７章で
+### パフォーマンスに関する欠点
+- 関数型アーキテクチャはプロセス外依存へのアクセスが導入前よりも多くなる
+- パフォーマンスを重視するのかシステムの保守のしやすさを重視するのか
+- 全ての課題を解決するできるアーキテクチャはないので、システムに応じて選択する必要がある
+### コードベースが大きくなる欠点
+- 関数型アーキテクチャを導入することでコード量が増えた
+	- ただし一つ一つのクラスはシンプルになるため保守派しやすくなるはず
+- とは言え、最初に関数型アーキテクチャを導入する負担はある
+- 必ずしも厳格に関数型プログラミングに置ける純粋性を維持する必要はない
+	- すべてのテストケースを出力値ベーステストにすることではなく、**できるだけ多く**のテストケースを出力値ベースにするように考える
+	- 必要に応じて、状態ベーステストも組み合わせてテストケースを作成するｓｓ
 
 # 第７章 単体テストの価値を高めるリファクタリング
 ## リファクタリングが必要なコードの識別
